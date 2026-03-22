@@ -39,3 +39,27 @@
 
 # debug information files
 *.dwo
+
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# Generated proto files
+generated/
+
+# vcpkg installed packages
+vcpkg_installed/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.idea/
+compile_commands.json
+
+# Temporary generator scripts
+gen_project.py

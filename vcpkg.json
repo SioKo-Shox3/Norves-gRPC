@@ -1,0 +1,21 @@
+{
+  "name": "norves-grpc",
+  "version": "0.1.0",
+  "description": "Game-oriented general-purpose network library wrapping gRPC",
+  "homepage": "https://github.com/SioKo-Shox3/NorvesLib",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "grpc",
+      "version>=": "1.60.0"
+    },
+    {
+      "name": "protobuf",
+      "version>=": "3.21.0"
+    },
+    {
+      "name": "gtest",
+      "version>=": "1.14.0"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package norves.core;
+
+option cc_enable_arenas = true;
+
+// Core service providing fundamental connectivity operations.
+service CoreService {
+    // Simple ping-pong to verify connectivity.
+    rpc Ping(PingRequest) returns (PingResponse);
+
+    // Bidirectional stream for echo communication.
+    rpc Echo(stream EchoMessage) returns (stream EchoMessage);
+}
+
+// Ping request carrying an optional payload for latency measurement.
+message PingRequest {
+    int64 timestamp = 1;  // Client-side timestamp (epoch ms)
+}
+
+// Ping response with round-trip information.
+message PingResponse {
+    int64 client_timestamp = 1;  // Echoed client timestamp
+    int64 server_timestamp = 2;  // Server-side timestamp (epoch ms)
+}
+
+// Generic echo message.
+message EchoMessage {
+    string content = 1;
+    int64 timestamp = 2;
+}
