@@ -12,6 +12,8 @@
 #include <vector>
 #include <memory_resource>
 
+#include "norves/core/double_buffered_queue.h"
+
 namespace norves::core {
 
 /// Configuration for a gRPC client.
@@ -39,6 +41,12 @@ public:
 
     /// Shuts down the client.
     void Shutdown();
+
+    /// Processes queued tasks on the calling thread (e.g., game main loop).
+    void Tick();
+
+    /// Posts a task to be executed on the main thread during the next Tick().
+    void PostToMainThread(std::function<void()> task);
 
     /// Returns true if the client is running.
     [[nodiscard]] bool IsRunning() const noexcept;
@@ -71,6 +79,7 @@ private:
     std::unique_ptr<grpc::CompletionQueue> m_Cq;
     std::pmr::vector<std::thread> m_CqThreads;
     std::atomic<bool> m_bRunning{false};
+    DoubleBufferedQueue<std::function<void()>> m_MainThreadTasks;
 };
 
 } // namespace norves::core

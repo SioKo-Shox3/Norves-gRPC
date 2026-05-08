@@ -9,6 +9,7 @@ GrpcServer::GrpcServer(ServerConfig config)
     : m_Config(std::move(config))
     , m_Builder(std::make_unique<grpc::ServerBuilder>())
     , m_CqThreads(m_Config.pMemoryResource)
+    , m_MainThreadTasks(m_Config.pMemoryResource)
 {
 }
 
@@ -88,6 +89,25 @@ void GrpcServer::Shutdown()
         {
         }
     }
+}
+
+void GrpcServer::Tick()
+{
+    std::pmr::vector<std::function<void()>> tasks(m_Config.pMemoryResource);
+    m_MainThreadTasks.SwapAndGet(tasks);
+    
+    for (auto& task : tasks)
+    {
+        if (task)
+        {
+            task();
+        }
+    }
+}
+
+void GrpcServer::PostToMainThread(std::function<void()> task)
+{
+    m_MainThreadTasks.Enqueue(std::move(task));
 }
 
 bool GrpcServer::IsRunning() const noexcept

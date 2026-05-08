@@ -8,6 +8,7 @@ GrpcClient::GrpcClient(ClientConfig config)
     , m_Channel(m_Config.Channel)
     , m_Cq(std::make_unique<grpc::CompletionQueue>())
     , m_CqThreads(m_Config.pMemoryResource)
+    , m_MainThreadTasks(m_Config.pMemoryResource)
 {
 }
 
@@ -64,6 +65,25 @@ void GrpcClient::Shutdown()
         {
         }
     }
+}
+
+void GrpcClient::Tick()
+{
+    std::pmr::vector<std::function<void()>> tasks(m_Config.pMemoryResource);
+    m_MainThreadTasks.SwapAndGet(tasks);
+    
+    for (auto& task : tasks)
+    {
+        if (task)
+        {
+            task();
+        }
+    }
+}
+
+void GrpcClient::PostToMainThread(std::function<void()> task)
+{
+    m_MainThreadTasks.Enqueue(std::move(task));
 }
 
 bool GrpcClient::IsRunning() const noexcept
