@@ -64,6 +64,8 @@ set(NORVES_SOURCES
     src/core/grpc_channel.cpp
     src/core/grpc_server.cpp
     src/core/grpc_client.cpp
+    src/session/session.cpp
+    src/session/session_manager.cpp
     ${CORE_PROTO_SRCS}
 )
 

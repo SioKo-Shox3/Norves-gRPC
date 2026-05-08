@@ -1,4 +1,5 @@
 #include "norves/core/grpc_client.h"
+#include "norves/core/async_context.h"
 
 namespace norves::core {
 
@@ -100,8 +101,8 @@ void GrpcClient::PollCompletionQueue()
         {
             if (tag)
             {
-                auto* handler = static_cast<std::function<void(bool)>*>(tag);
-                (*handler)(ok);
+                auto* handler = static_cast<IAsyncContext*>(tag);
+                handler->OnEvent(ok);
             }
         }
         else if (result == grpc::CompletionQueue::SHUTDOWN)
