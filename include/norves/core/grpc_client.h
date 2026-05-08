@@ -10,17 +10,21 @@
 #include <atomic>
 #include <functional>
 #include <vector>
+#include <memory_resource>
 
 namespace norves::core {
 
 /// Configuration for a gRPC client.
-struct ClientConfig {
-    ChannelConfig channel;
-    int completion_queue_threads = 1;
+struct ClientConfig
+{
+    ChannelConfig Channel;
+    int NumCqThreads = 1;
+    std::pmr::memory_resource* pMemoryResource = std::pmr::get_default_resource();
 };
 
 /// RAII wrapper around a gRPC async client.
-class GrpcClient {
+class GrpcClient
+{
 public:
     explicit GrpcClient(ClientConfig config);
     ~GrpcClient();
@@ -40,8 +44,15 @@ public:
     [[nodiscard]] bool IsRunning() const noexcept;
 
     /// Returns the underlying channel wrapper.
-    [[nodiscard]] GrpcChannel& GetChannel() noexcept { return channel_; }
-    [[nodiscard]] const GrpcChannel& GetChannel() const noexcept { return channel_; }
+    [[nodiscard]] GrpcChannel& GetChannel() noexcept
+    {
+        return m_Channel;
+    }
+    
+    [[nodiscard]] const GrpcChannel& GetChannel() const noexcept
+    {
+        return m_Channel;
+    }
 
     /// Returns the shared gRPC channel (for creating stubs).
     [[nodiscard]] std::shared_ptr<grpc::Channel> GetGrpcChannel() const noexcept;
@@ -55,11 +66,11 @@ public:
 private:
     void PollCompletionQueue();
 
-    ClientConfig config_;
-    GrpcChannel channel_;
-    std::unique_ptr<grpc::CompletionQueue> cq_;
-    std::vector<std::thread> cq_threads_;
-    std::atomic<bool> running_{false};
+    ClientConfig m_Config;
+    GrpcChannel m_Channel;
+    std::unique_ptr<grpc::CompletionQueue> m_Cq;
+    std::pmr::vector<std::thread> m_CqThreads;
+    std::atomic<bool> m_bRunning{false};
 };
 
 } // namespace norves::core

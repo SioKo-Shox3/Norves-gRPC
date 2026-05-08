@@ -4,8 +4,10 @@
 
 namespace norves::core {
 
-std::string_view StatusCodeToString(StatusCode code) noexcept {
-    switch (code) {
+std::string_view StatusCodeToString(StatusCode code) noexcept
+{
+    switch (code)
+    {
         case StatusCode::Ok:                return "OK";
         case StatusCode::Cancelled:         return "CANCELLED";
         case StatusCode::Unknown:           return "UNKNOWN";
@@ -24,31 +26,45 @@ std::string_view StatusCodeToString(StatusCode code) noexcept {
     }
 }
 
-Status::Status() noexcept : code_(StatusCode::Ok) {}
+Status::Status() noexcept : m_Code(StatusCode::Ok)
+{
+}
 
-Status::Status(StatusCode code, std::string message)
-    : code_(code), message_(std::move(message)) {}
+Status::Status(StatusCode code, std::pmr::string message)
+    : m_Code(code), m_Message(std::move(message))
+{
+}
 
-Status Status::Ok() noexcept {
+Status Status::Ok() noexcept
+{
     return Status{};
 }
 
-std::string Status::ToString() const {
-    if (ok()) return "OK";
+std::string Status::ToString() const
+{
+    if (IsOk())
+    {
+        return "OK";
+    }
+    
     std::ostringstream oss;
-    oss << StatusCodeToString(code_);
-    if (!message_.empty()) {
-        oss << ": " << message_;
+    oss << StatusCodeToString(m_Code);
+    if (!m_Message.empty())
+    {
+        oss << ": " << m_Message.c_str();
     }
     return oss.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const Status& s) {
+std::ostream& operator<<(std::ostream& os, const Status& s)
+{
     return os << s.ToString();
 }
 
-StatusCode FromGrpcStatusCode(int grpc_code) noexcept {
-    switch (grpc_code) {
+StatusCode FromGrpcStatusCode(int grpc_code) noexcept
+{
+    switch (grpc_code)
+    {
         case 0:  return StatusCode::Ok;
         case 1:  return StatusCode::Cancelled;
         case 2:  return StatusCode::Unknown;

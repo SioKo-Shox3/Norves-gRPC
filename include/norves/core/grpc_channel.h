@@ -6,17 +6,21 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <memory_resource>
 
 namespace norves::core {
 
 /// Configuration for creating a gRPC channel.
-struct ChannelConfig {
-    std::string target;           // e.g. "localhost:50051"
-    bool use_tls = false;         // Use TLS credentials (false = insecure)
+struct ChannelConfig
+{
+    std::pmr::string Target;      // e.g. "localhost:50051"
+    bool bUseTls = false;         // Use TLS credentials (false = insecure)
+    std::pmr::memory_resource* pMemoryResource = std::pmr::get_default_resource();
 };
 
 /// RAII wrapper around a gRPC channel, managing connection lifecycle.
-class GrpcChannel {
+class GrpcChannel
+{
 public:
     /// Constructs a channel with the given configuration.
     explicit GrpcChannel(ChannelConfig config);
@@ -39,11 +43,14 @@ public:
     [[nodiscard]] Status WaitForConnected(int timeout_ms = 5000);
 
     /// Returns the target address.
-    [[nodiscard]] const std::string& target() const noexcept { return config_.target; }
+    [[nodiscard]] const std::pmr::string& GetTarget() const noexcept
+    {
+        return m_Config.Target;
+    }
 
 private:
-    ChannelConfig config_;
-    std::shared_ptr<grpc::Channel> channel_;
+    ChannelConfig m_Config;
+    std::shared_ptr<grpc::Channel> m_Channel;
 };
 
 } // namespace norves::core

@@ -5,35 +5,41 @@
 namespace norves::core {
 
 GrpcChannel::GrpcChannel(ChannelConfig config)
-    : config_(std::move(config))
+    : m_Config(std::move(config))
 {
-    auto creds = config_.use_tls
+    auto creds = m_Config.bUseTls
         ? grpc::SslCredentials(grpc::SslCredentialsOptions{})
         : grpc::InsecureChannelCredentials();
 
-    channel_ = grpc::CreateChannel(config_.target, creds);
+    m_Channel = grpc::CreateChannel(std::string(m_Config.Target.c_str()), creds);
 }
 
-std::shared_ptr<grpc::Channel> GrpcChannel::GetChannel() const noexcept {
-    return channel_;
+std::shared_ptr<grpc::Channel> GrpcChannel::GetChannel() const noexcept
+{
+    return m_Channel;
 }
 
-bool GrpcChannel::IsConnected() const {
-    auto state = channel_->GetState(false);
+bool GrpcChannel::IsConnected() const
+{
+    auto state = m_Channel->GetState(false);
     return state == GRPC_CHANNEL_READY;
 }
 
-Status GrpcChannel::WaitForConnected(int timeout_ms) {
+Status GrpcChannel::WaitForConnected(int timeout_ms)
+{
     auto deadline = std::chrono::system_clock::now()
                   + std::chrono::milliseconds(timeout_ms);
 
-    channel_->GetState(true);
+    m_Channel->GetState(true);
 
-    if (channel_->WaitForConnected(deadline)) {
+    if (m_Channel->WaitForConnected(deadline))
+    {
         return Status::Ok();
     }
-    return Status{StatusCode::DeadlineExceeded,
-                  "Channel failed to connect to " + config_.target};
+    
+    std::pmr::string errorMsg("Channel failed to connect to ", m_Config.pMemoryResource);
+    errorMsg += m_Config.Target;
+    return Status{StatusCode::DeadlineExceeded, std::move(errorMsg)};
 }
 
 } // namespace norves::core

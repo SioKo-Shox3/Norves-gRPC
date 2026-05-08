@@ -5,94 +5,121 @@
 namespace norves::core {
 
 GrpcServer::GrpcServer(ServerConfig config)
-    : config_(std::move(config))
-    , builder_(std::make_unique<grpc::ServerBuilder>())
+    : m_Config(std::move(config))
+    , m_Builder(std::make_unique<grpc::ServerBuilder>())
+    , m_CqThreads(m_Config.pMemoryResource)
 {
 }
 
-GrpcServer::~GrpcServer() {
+GrpcServer::~GrpcServer()
+{
     Shutdown();
 }
 
-void GrpcServer::RegisterService(grpc::Service* service) {
-    builder_->RegisterService(service);
+void GrpcServer::RegisterService(grpc::Service* service)
+{
+    m_Builder->RegisterService(service);
 }
 
-Status GrpcServer::Start() {
-    if (running_.load()) {
-        return Status{StatusCode::AlreadyExists, "Server is already running"};
+Status GrpcServer::Start()
+{
+    if (m_bRunning.load())
+    {
+        std::pmr::string errorMsg("Server is already running", m_Config.pMemoryResource);
+        return Status{StatusCode::AlreadyExists, std::move(errorMsg)};
     }
 
-    builder_->AddListeningPort(config_.listen_address,
+    m_Builder->AddListeningPort(std::string(m_Config.ListenAddress.c_str()),
                                grpc::InsecureServerCredentials(),
-                               &bound_port_);
+                               &m_BoundPort);
 
-    cq_ = builder_->AddCompletionQueue();
+    m_Cq = m_Builder->AddCompletionQueue();
 
-    server_ = builder_->BuildAndStart();
-    if (!server_) {
-        return Status{StatusCode::Internal,
-                      "Failed to start server on " + config_.listen_address};
+    m_Server = m_Builder->BuildAndStart();
+    if (!m_Server)
+    {
+        std::pmr::string errorMsg("Failed to start server on ", m_Config.pMemoryResource);
+        errorMsg += m_Config.ListenAddress;
+        return Status{StatusCode::Internal, std::move(errorMsg)};
     }
 
-    running_.store(true);
+    m_bRunning.store(true);
 
-    for (int i = 0; i < config_.num_cq_threads; ++i) {
-        cq_threads_.emplace_back([this]() { PollCompletionQueue(); });
+    m_CqThreads.reserve(m_Config.NumCqThreads);
+    for (int i = 0; i < m_Config.NumCqThreads; ++i)
+    {
+        m_CqThreads.emplace_back([this]() { PollCompletionQueue(); });
     }
 
     return Status::Ok();
 }
 
-void GrpcServer::Shutdown() {
-    if (!running_.exchange(false)) {
+void GrpcServer::Shutdown()
+{
+    if (!m_bRunning.exchange(false))
+    {
         return;
     }
 
-    if (server_) {
-        server_->Shutdown();
+    if (m_Server)
+    {
+        m_Server->Shutdown();
     }
-    if (cq_) {
-        cq_->Shutdown();
+    if (m_Cq)
+    {
+        m_Cq->Shutdown();
     }
 
-    for (auto& t : cq_threads_) {
-        if (t.joinable()) {
+    for (auto& t : m_CqThreads)
+    {
+        if (t.joinable())
+        {
             t.join();
         }
     }
-    cq_threads_.clear();
+    m_CqThreads.clear();
 
-    if (cq_) {
+    if (m_Cq)
+    {
         void* tag = nullptr;
         bool ok = false;
-        while (cq_->Next(&tag, &ok)) {}
+        while (m_Cq->Next(&tag, &ok))
+        {
+        }
     }
 }
 
-bool GrpcServer::IsRunning() const noexcept {
-    return running_.load();
+bool GrpcServer::IsRunning() const noexcept
+{
+    return m_bRunning.load();
 }
 
-grpc::ServerCompletionQueue* GrpcServer::GetCompletionQueue() const noexcept {
-    return cq_.get();
+grpc::ServerCompletionQueue* GrpcServer::GetCompletionQueue() const noexcept
+{
+    return m_Cq.get();
 }
 
-void GrpcServer::PollCompletionQueue() {
+void GrpcServer::PollCompletionQueue()
+{
     void* tag = nullptr;
     bool ok = false;
 
-    while (running_.load()) {
+    while (m_bRunning.load())
+    {
         auto deadline = std::chrono::system_clock::now()
                       + std::chrono::milliseconds(100);
-        auto result = cq_->AsyncNext(&tag, &ok, deadline);
+        auto result = m_Cq->AsyncNext(&tag, &ok, deadline);
 
-        if (result == grpc::CompletionQueue::GOT_EVENT) {
-            if (tag) {
+        if (result == grpc::CompletionQueue::GOT_EVENT)
+        {
+            if (tag)
+            {
                 auto* handler = static_cast<std::function<void(bool)>*>(tag);
                 (*handler)(ok);
             }
-        } else if (result == grpc::CompletionQueue::SHUTDOWN) {
+        }
+        else if (result == grpc::CompletionQueue::SHUTDOWN)
+        {
             break;
         }
     }

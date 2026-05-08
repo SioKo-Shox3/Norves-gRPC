@@ -3,84 +3,109 @@
 namespace norves::core {
 
 GrpcClient::GrpcClient(ClientConfig config)
-    : config_(std::move(config))
-    , channel_(config_.channel)
-    , cq_(std::make_unique<grpc::CompletionQueue>())
+    : m_Config(std::move(config))
+    , m_Channel(m_Config.Channel)
+    , m_Cq(std::make_unique<grpc::CompletionQueue>())
+    , m_CqThreads(m_Config.pMemoryResource)
 {
 }
 
-GrpcClient::~GrpcClient() {
+GrpcClient::~GrpcClient()
+{
     Shutdown();
 }
 
-Status GrpcClient::Start() {
-    if (running_.load()) {
-        return Status{StatusCode::AlreadyExists, "Client is already running"};
+Status GrpcClient::Start()
+{
+    if (m_bRunning.load())
+    {
+        std::pmr::string errorMsg("Client is already running", m_Config.pMemoryResource);
+        return Status{StatusCode::AlreadyExists, std::move(errorMsg)};
     }
 
-    running_.store(true);
+    m_bRunning.store(true);
 
-    for (int i = 0; i < config_.completion_queue_threads; ++i) {
-        cq_threads_.emplace_back([this]() { PollCompletionQueue(); });
+    m_CqThreads.reserve(m_Config.NumCqThreads);
+    for (int i = 0; i < m_Config.NumCqThreads; ++i)
+    {
+        m_CqThreads.emplace_back([this]() { PollCompletionQueue(); });
     }
 
     return Status::Ok();
 }
 
-void GrpcClient::Shutdown() {
-    if (!running_.exchange(false)) {
+void GrpcClient::Shutdown()
+{
+    if (!m_bRunning.exchange(false))
+    {
         return;
     }
 
-    if (cq_) {
-        cq_->Shutdown();
+    if (m_Cq)
+    {
+        m_Cq->Shutdown();
     }
 
-    for (auto& t : cq_threads_) {
-        if (t.joinable()) {
+    for (auto& t : m_CqThreads)
+    {
+        if (t.joinable())
+        {
             t.join();
         }
     }
-    cq_threads_.clear();
+    m_CqThreads.clear();
 
-    if (cq_) {
+    if (m_Cq)
+    {
         void* tag = nullptr;
         bool ok = false;
-        while (cq_->Next(&tag, &ok)) {}
+        while (m_Cq->Next(&tag, &ok))
+        {
+        }
     }
 }
 
-bool GrpcClient::IsRunning() const noexcept {
-    return running_.load();
+bool GrpcClient::IsRunning() const noexcept
+{
+    return m_bRunning.load();
 }
 
-std::shared_ptr<grpc::Channel> GrpcClient::GetGrpcChannel() const noexcept {
-    return channel_.GetChannel();
+std::shared_ptr<grpc::Channel> GrpcClient::GetGrpcChannel() const noexcept
+{
+    return m_Channel.GetChannel();
 }
 
-grpc::CompletionQueue* GrpcClient::GetCompletionQueue() noexcept {
-    return cq_.get();
+grpc::CompletionQueue* GrpcClient::GetCompletionQueue() noexcept
+{
+    return m_Cq.get();
 }
 
-Status GrpcClient::WaitForConnected(int timeout_ms) {
-    return channel_.WaitForConnected(timeout_ms);
+Status GrpcClient::WaitForConnected(int timeout_ms)
+{
+    return m_Channel.WaitForConnected(timeout_ms);
 }
 
-void GrpcClient::PollCompletionQueue() {
+void GrpcClient::PollCompletionQueue()
+{
     void* tag = nullptr;
     bool ok = false;
 
-    while (running_.load()) {
+    while (m_bRunning.load())
+    {
         auto deadline = std::chrono::system_clock::now()
                       + std::chrono::milliseconds(100);
-        auto result = cq_->AsyncNext(&tag, &ok, deadline);
+        auto result = m_Cq->AsyncNext(&tag, &ok, deadline);
 
-        if (result == grpc::CompletionQueue::GOT_EVENT) {
-            if (tag) {
+        if (result == grpc::CompletionQueue::GOT_EVENT)
+        {
+            if (tag)
+            {
                 auto* handler = static_cast<std::function<void(bool)>*>(tag);
                 (*handler)(ok);
             }
-        } else if (result == grpc::CompletionQueue::SHUTDOWN) {
+        }
+        else if (result == grpc::CompletionQueue::SHUTDOWN)
+        {
             break;
         }
     }
